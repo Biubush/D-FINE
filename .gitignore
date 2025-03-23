@@ -4,3 +4,11 @@ weight/
 wandb/
 *.pth
 *.onnx
+run.bat
+*.jpg
+*.png
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.ico
