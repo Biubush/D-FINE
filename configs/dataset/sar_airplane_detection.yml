@@ -39,3 +39,20 @@ val_dataloader:
   drop_last: False
   collate_fn:
     type: BatchImageCollateFunction
+
+
+test_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: D:/Biubush/Archives/Documents/Datasets/SAR-AIRcraft-1.0/JPEGImages/
+    ann_file: D:/Biubush/Archives/Documents/Datasets/SAR-AIRcraft-1.0-COCO/test_coco.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops: ~
+  shuffle: False
+  num_workers: 2
+  drop_last: False
+  collate_fn:
+    type: BatchImageCollateFunction
