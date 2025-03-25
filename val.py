@@ -14,7 +14,6 @@ import os
 import sys
 import argparse
 import torch
-import json
 from pathlib import Path
 from pprint import pprint
 
