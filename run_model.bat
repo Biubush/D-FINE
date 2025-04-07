@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 > nul
 setlocal enabledelayedexpansion
 
 :: 检查参数
@@ -28,7 +29,7 @@ set logfile=logs\sar_dfine_%model_size%_%datetime:~0,8%_%datetime:~8,6%.log
 
 :: 创建VBS脚本以在后台运行命令
 echo Set WshShell = CreateObject("WScript.Shell") > %temp%\run_hidden.vbs
-echo WshShell.Run "cmd /c cd D:\Biubush\Archives\CodeSpace\D-FINE && D:\Biubush\Archives\CodeSpace\D-FINE\.conda\python.exe D:\Biubush\Archives\CodeSpace\D-FINE\early_stop.py -c D:\Biubush\Archives\CodeSpace\D-FINE\configs\dfine\custom\%config_file% --use-amp --seed=0 --patience=50 --min-epochs=100 > %logfile% 2>&1", 0, false >> %temp%\run_hidden.vbs
+echo WshShell.Run "cmd /c chcp 65001 > nul && cd D:\Biubush\Archives\CodeSpace\D-FINE && D:\Biubush\Archives\CodeSpace\D-FINE\.conda\python.exe D:\Biubush\Archives\CodeSpace\D-FINE\early_stop.py -c D:\Biubush\Archives\CodeSpace\D-FINE\configs\dfine\custom\%config_file% --use-amp --seed=0 --patience=50 --min-epochs=100 > %logfile% 2>&1", 0, false >> %temp%\run_hidden.vbs
 
 :: 记录启动信息
 echo 启动训练任务，日志将保存到: %logfile%
