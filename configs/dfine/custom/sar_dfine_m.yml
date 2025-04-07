@@ -50,6 +50,7 @@ optimizer:
 # Increase to search for the optimal ema
 epochs: 132 # 120 + 4n
 train_dataloader:
+  total_batch_size: 48
   dataset:
     transforms:
       policy:
@@ -58,3 +59,6 @@ train_dataloader:
     stop_epoch: 120
     ema_restart_decay: 0.9999
     base_size_repeat: 6
+
+val_dataloader:
+  total_batch_size: 48
