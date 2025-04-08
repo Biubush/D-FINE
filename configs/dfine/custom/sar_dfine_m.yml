@@ -48,7 +48,7 @@ optimizer:
 
 
 # Increase to search for the optimal ema
-epochs: 10000  # 使用大数字，训练将由早停机制控制
+epochs: 10000
 train_dataloader:
   total_batch_size: 48
   dataset:
