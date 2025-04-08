@@ -49,7 +49,7 @@ optimizer:
 
 
 # Increase to search for the optimal ema
-epochs: 220
+epochs: 10000
 train_dataloader:
   total_batch_size: 64
   dataset:
