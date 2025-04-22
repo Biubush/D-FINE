@@ -24,7 +24,7 @@ for %%m in (%models%) do (
         
         :: 创建VBS脚本以在后台运行命令
         echo Set WshShell = CreateObject("WScript.Shell") > %temp%\run_hidden_!model_size!.vbs
-        echo WshShell.Run "cmd /c chcp 65001 > nul && cd D:\Biubush\Archives\CodeSpace\D-FINE && D:\Biubush\Archives\CodeSpace\D-FINE\.conda\python.exe D:\Biubush\Archives\CodeSpace\D-FINE\early_stop.py -c D:\Biubush\Archives\CodeSpace\D-FINE\configs\dfine\custom\!config_file! --use-amp --seed=0 --patience=50 --min-epochs=100 > !logfile! 2>&1", 0, false >> %temp%\run_hidden_!model_size!.vbs
+        echo WshShell.Run "cmd /c chcp 65001 > nul && cd %~dp0 && .\.conda\python.exe early_stop.py -c configs\dfine\custom\!config_file! --use-amp --seed=0 --patience=50 --min-epochs=100 > !logfile! 2>&1", 0, false >> %temp%\run_hidden_!model_size!.vbs
         
         :: 记录启动信息
         echo 启动时间: %date% %time% > !logfile!

@@ -11,8 +11,8 @@ train_dataloader:
   type: DataLoader
   dataset:
     type: CocoDetection
-    img_folder: D:/Biubush/Archives/Documents/Datasets/SAR-AIRcraft-1.0/JPEGImages/
-    ann_file: D:/Biubush/Archives/Documents/Datasets/SAR-AIRcraft-1.0-COCO/train_coco.json
+    img_folder: ./datasets/SAR-AIRcraft-1.0/images/train/
+    ann_file: ./datasets/SAR-AIRcraft-1.0/annotations/instances_train.json
     return_masks: False
     transforms:
       type: Compose
@@ -28,8 +28,8 @@ val_dataloader:
   type: DataLoader
   dataset:
     type: CocoDetection
-    img_folder: D:/Biubush/Archives/Documents/Datasets/SAR-AIRcraft-1.0/JPEGImages/
-    ann_file: D:/Biubush/Archives/Documents/Datasets/SAR-AIRcraft-1.0-COCO/val_coco.json
+    img_folder: ./datasets/SAR-AIRcraft-1.0/images/val/
+    ann_file: ./datasets/SAR-AIRcraft-1.0/annotations/instances_val.json
     return_masks: False
     transforms:
       type: Compose
@@ -45,8 +45,8 @@ test_dataloader:
   type: DataLoader
   dataset:
     type: CocoDetection
-    img_folder: D:/Biubush/Archives/Documents/Datasets/SAR-AIRcraft-1.0/JPEGImages/
-    ann_file: D:/Biubush/Archives/Documents/Datasets/SAR-AIRcraft-1.0-COCO/test_coco.json
+    img_folder: ./datasets/SAR-AIRcraft-1.0/images/test/
+    ann_file: ./datasets/SAR-AIRcraft-1.0/annotations/instances_test.json
     return_masks: False
     transforms:
       type: Compose
