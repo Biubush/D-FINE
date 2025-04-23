@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>D-FINE 模型训练可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            padding: 20px;
+        }
+        .chart {
+            min-width: 600px;
+            height: 400px;
+            flex: 1;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .model-selector {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        body {
+            background: #f5f5f5;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>D-FINE 模型训练可视化面板</h1>
+    
+    <div class="model-selector">
+        <label>选择模型:</label>
+        <select id="modelSelect" onchange="updateCharts()">
+            <option value="sar_dfine_x">SAR D-FINE-X</option>
+            <option value="sar_dfine_l">SAR D-FINE-L</option>
+            <option value="sar_dfine_m">SAR D-FINE-M</option>
+            <option value="sar_dfine_s">SAR D-FINE-S</option>
+            <option value="sar_dfine_n">SAR D-FINE-N</option>
+        </select>
+    </div>
+
+    <div class="container">
+        <div id="lossChart" class="chart"></div>
+        <div id="learningRateChart" class="chart"></div>
+        <div id="auxLossChart" class="chart"></div>
+        <div id="evalChart" class="chart"></div>
+    </div>
+
+    <script>
+        // 初始化所有图表
+        const charts = {
+            loss: echarts.init(document.getElementById('lossChart')),
+            lr: echarts.init(document.getElementById('learningRateChart')),
+            auxLoss: echarts.init(document.getElementById('auxLossChart')),
+            eval: echarts.init(document.getElementById('evalChart'))
+        };
+
+        // 配色方案
+        const colors = ['#ff4d4f', '#ffc53d', '#1890ff', '#52c41a', '#722ed1'];
+
+        // 基础配置
+        const baseOption = {
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'cross'
+                }
+            },
+            grid: {
+                right: '3%',
+                left: '3%',
+                bottom: '3%',
+                containLabel: true
+            },
+            toolbox: {
+                feature: {
+                    saveAsImage: {},
+                    dataZoom: {},
+                    restore: {}
+                }
+            },
+            animation: true,
+            animationDuration: 1000,
+            animationEasing: 'cubicInOut'
+        };
+
+        // 损失曲线配置
+        const lossOption = {
+            ...baseOption,
+            title: {
+                text: '主要损失曲线',
+                left: 'center'
+            },
+            legend: {
+                data: ['Total Loss', 'VFL Loss', 'Bbox Loss', 'GIoU Loss', 'FGL Loss'],
+                top: 25
+            },
+            xAxis: {
+                type: 'category',
+                name: 'Epoch'
+            },
+            yAxis: {
+                type: 'value',
+                name: 'Loss'
+            },
+            series: [
+                {
+                    name: 'Total Loss',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[0]
+                },
+                {
+                    name: 'VFL Loss',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[1]
+                },
+                {
+                    name: 'Bbox Loss',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[2]
+                },
+                {
+                    name: 'GIoU Loss',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[3]
+                },
+                {
+                    name: 'FGL Loss',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[4]
+                }
+            ]
+        };
+
+        // 学习率配置
+        const lrOption = {
+            ...baseOption,
+            title: {
+                text: '学习率变化',
+                left: 'center'
+            },
+            xAxis: {
+                type: 'category',
+                name: 'Epoch'
+            },
+            yAxis: {
+                type: 'value',
+                name: 'Learning Rate'
+            },
+            series: [{
+                type: 'line',
+                smooth: true,
+                color: colors[0],
+                areaStyle: {
+                    opacity: 0.3
+                }
+            }]
+        };
+
+        // 辅助损失配置
+        const auxLossOption = {
+            ...baseOption,
+            title: {
+                text: '辅助损失曲线',
+                left: 'center'
+            },
+            legend: {
+                data: ['VFL Aux', 'Bbox Aux', 'GIoU Aux', 'FGL Aux', 'DDF Aux'],
+                top: 25
+            },
+            xAxis: {
+                type: 'category',
+                name: 'Epoch'
+            },
+            yAxis: {
+                type: 'value',
+                name: 'Loss'
+            },
+            series: [
+                {
+                    name: 'VFL Aux',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[0]
+                },
+                {
+                    name: 'Bbox Aux',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[1]
+                },
+                {
+                    name: 'GIoU Aux',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[2]
+                },
+                {
+                    name: 'FGL Aux',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[3]
+                },
+                {
+                    name: 'DDF Aux',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[4]
+                }
+            ]
+        };
+
+        // 评估指标配置
+        const evalOption = {
+            ...baseOption,
+            title: {
+                text: 'COCO评估指标',
+                left: 'center'
+            },
+            legend: {
+                data: ['AP', 'AP50', 'AP75', 'APS', 'APM', 'APL'],
+                top: 25
+            },
+            xAxis: {
+                type: 'category',
+                name: 'Epoch'
+            },
+            yAxis: {
+                type: 'value',
+                name: 'AP'
+            },
+            series: [
+                {
+                    name: 'AP',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[0]
+                },
+                {
+                    name: 'AP50',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[1]
+                },
+                {
+                    name: 'AP75',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[2]
+                },
+                {
+                    name: 'APS',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[3]
+                },
+                {
+                    name: 'APM',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: colors[4]
+                },
+                {
+                    name: 'APL',
+                    type: 'line',
+                    smooth: true,
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    color: '#13c2c2'
+                }
+            ]
+        };
+
+        // 设置响应式
+        window.addEventListener('resize', () => {
+            Object.values(charts).forEach(chart => chart.resize());
+        });
+
+        // 初始化图表
+        charts.loss.setOption(lossOption);
+        charts.lr.setOption(lrOption);
+        charts.auxLoss.setOption(auxLossOption);
+        charts.eval.setOption(evalOption);
+    </script>
+</body>
+</html>
