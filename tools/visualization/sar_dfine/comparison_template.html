@@ -156,6 +156,20 @@
             min-width: 0;
             width: 100%;
         }
+        
+        /* 特定用于一行两列的容器 */
+        .two-column-row {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .two-column-row .chart-container {
+            flex: 1;
+            min-width: 45%;
+        }
     </style>
 </head>
 <body>
@@ -219,9 +233,12 @@
         
         <!-- 综合参数比较 -->
         <h2>综合参数对比</h2>
-        <div class="chart-row">
-            <div class="chart-container full-width">
-                <div id="comprehensiveChart" class="large-chart"></div>
+        <div class="two-column-row">
+            <div class="chart-container">
+                <div id="comprehensiveRadarChart" class="large-chart"></div>
+            </div>
+            <div class="chart-container">
+                <div id="comprehensiveScatterChart" class="large-chart"></div>
             </div>
         </div>
         

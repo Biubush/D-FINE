@@ -195,7 +195,7 @@ def generate_comparison_html():
     # 生成HTML内容
     with open(r'tools\visualization\sar_dfine\comparison_template.html', 'r', encoding='utf-8') as f:
         template = f.read()
-    
+
     # 准备JavaScript数据
     js_content = f"""
 // 模型数据
@@ -261,6 +261,10 @@ const auxLossRanges = {json.dumps({k: metric_ranges.get(k, {'min': 0, 'max': 1})
 // 其他参数数据
 const otherData = {json.dumps(other_data)};
 
+// 图表下载功能
+// function addDownloadButton(chartInstance, buttonId, filename) { ... } // 删除
+// function createDownloadButton(containerId, buttonId, text) { ... } // 删除
+
 // 格式化数字显示（小数保留4位有效数字，整数不显示小数点）
 function formatNumber(num, isLearningRate = false) {{
     if (isLearningRate) {{
@@ -322,11 +326,13 @@ function initCharts() {{
 function initAPBarCharts() {{
     const apMetrics = ['AP', 'AP50', 'AP75', 'AP_small', 'AP_medium', 'AP_large'];
     const apTitles = ['AP', 'AP50', 'AP75', 'AP Small', 'AP Medium', 'AP Large'];
+    const charts = [];
     
     // 为每个AP指标创建单独的图表
     apMetrics.forEach((metric, index) => {{
         const chartContainer = document.getElementById(`ap${{index + 1}}Chart`);
         const chart = echarts.init(chartContainer);
+        charts.push(chart);
         
         const options = {{
             title: {{
@@ -383,6 +389,15 @@ function initAPBarCharts() {{
                 left: '3%',
                 right: '3%',
                 bottom: '15%'
+            }},
+            toolbox: {{
+                feature: {{
+                    saveAsImage: {{
+                        title: '保存为图片',
+                        name: `AP-${{apTitles[index]}}`,
+                        pixelRatio: 2
+                    }}
+                }}
             }}
         }};
         
@@ -400,6 +415,7 @@ function initYOLOComparisonCharts() {{
 
     // 初始化mAP@0.5:0.95图表
     const mapChart = echarts.init(document.getElementById('yoloMapChart'));
+    
     mapChart.setOption({{
         title: {{
             text: 'mAP@0.5:0.95 对比',
@@ -467,11 +483,21 @@ function initYOLOComparisonCharts() {{
                     return formatNumber(params.value);
                 }}
             }}
-        }}]
+        }}],
+        toolbox: {{
+            feature: {{
+                saveAsImage: {{
+                    title: '保存为图片',
+                    name: 'mAP_0.5-0.95_comparison',
+                    pixelRatio: 2
+                }}
+            }}
+        }}
     }});
 
     // 初始化mAP@0.5图表
     const map50Chart = echarts.init(document.getElementById('yoloMap50Chart'));
+    
     map50Chart.setOption({{
         title: {{
             text: 'mAP@0.5 对比',
@@ -539,11 +565,21 @@ function initYOLOComparisonCharts() {{
                     return formatNumber(params.value);
                 }}
             }}
-        }}]
+        }}],
+        toolbox: {{
+            feature: {{
+                saveAsImage: {{
+                    title: '保存为图片',
+                    name: 'mAP_0.5_comparison',
+                    pixelRatio: 2
+                }}
+            }}
+        }}
     }});
 
     // 初始化mAP@0.75图表
     const map75Chart = echarts.init(document.getElementById('yoloMap75Chart'));
+    
     map75Chart.setOption({{
         title: {{
             text: 'mAP@0.75 对比',
@@ -611,7 +647,16 @@ function initYOLOComparisonCharts() {{
                     return formatNumber(params.value);
                 }}
             }}
-        }}]
+        }}],
+        toolbox: {{
+            feature: {{
+                saveAsImage: {{
+                    title: '保存为图片',
+                    name: 'mAP_0.75_comparison',
+                    pixelRatio: 2
+                }}
+            }}
+        }}
     }});
 
     // 添加窗口大小改变时的重绘
@@ -706,7 +751,16 @@ function initLossRadarChart() {{
                     }}
                 }}
             }}
-        ]
+        ],
+        toolbox: {{
+            feature: {{
+                saveAsImage: {{
+                    title: '保存为图片',
+                    name: 'loss_radar_chart',
+                    pixelRatio: 2
+                }}
+            }}
+        }}
     }};
     
     chart.setOption(options);
@@ -797,7 +851,16 @@ function initAuxLossRadarChart() {{
                     }}
                 }}
             }}
-        ]
+        ],
+        toolbox: {{
+            feature: {{
+                saveAsImage: {{
+                    title: '保存为图片',
+                    name: 'aux_loss_radar_chart',
+                    pixelRatio: 2
+                }}
+            }}
+        }}
     }};
     
     chart.setOption(options);
@@ -806,7 +869,9 @@ function initAuxLossRadarChart() {{
 
 // 初始化综合参数对比图
 function initComprehensiveComparisonChart() {{
-    const chart = echarts.init(document.getElementById('comprehensiveChart'));
+    // 创建两个单独的图表实例
+    const radarChart = echarts.init(document.getElementById('comprehensiveRadarChart'));
+    const scatterChart = echarts.init(document.getElementById('comprehensiveScatterChart'));
     
     // 定义评价指标
     const metrics = [
@@ -948,22 +1013,20 @@ function initComprehensiveComparisonChart() {{
         }};
     }});
     
-    // 计算坐标轴范围
-    const xValues = scatterData.map(d => d.value[0]);
+    // 计算散点图y轴范围
     const yValues = scatterData.map(d => d.value[1]);
     
-    const xRange = {{
-        min: Math.min(...xValues),
-        max: Math.max(...xValues)
-    }};
     const yRange = {{
         min: Math.min(...yValues),
         max: Math.max(...yValues)
     }};
     
-    // 扩展范围以突出差异
-    const xPadding = (xRange.max - xRange.min) * 0.2;
+    // 扩展y轴范围以突出差异
     const yPadding = (yRange.max - yRange.min) * 0.2;
+    
+    // 计算散点图x轴最大值
+    const xMax = Math.max(...scatterData.map(d => d.value[0]));
+    const xPadding = xMax * 0.1; // 10%的边距
     
     // 计算趋势线
     const linearRegression = (data) => {{
@@ -983,43 +1046,30 @@ function initComprehensiveComparisonChart() {{
         const intercept = (sum_y - slope * sum_x) / n;
         
         return [
-            [xRange.min - xPadding, slope * (xRange.min - xPadding) + intercept],
-            [xRange.max + xPadding, slope * (xRange.max + xPadding) + intercept]
+            [0, intercept],  // 从x=0开始
+            [xMax + xPadding, slope * (xMax + xPadding) + intercept]  // 到最大值
         ];
     }};
     
     const trendlineData = linearRegression(scatterData);
     
-    const options = {{
-        title: [
-            {{
-                text: '模型综合性能雷达图',
-                left: '5%',
-                top: '5%'
-            }},
-            {{
-                text: '性能-效率散点图',
-                left: '55%',
-                top: '5%'
-            }}
-        ],
+    // 雷达图配置
+    const radarOptions = {{
+        title: {{
+            text: '模型综合性能雷达图',
+            left: 'center',
+            top: '5%'
+        }},
         tooltip: {{
             trigger: 'item',
             formatter: function(params) {{
-                if (params.componentType === 'series' && params.seriesType === 'radar') {{
-                    let result = params.name + '<br/>';
-                    metrics.forEach((metric, index) => {{
-                        const normalizedValue = params.value[index];
-                        const rawValue = rawScores.find(s => s.model === params.name).scores[metric.key];
-                        result += `${{metric.name}}: ${{formatNumber(rawValue)}} (归一化: ${{formatNumber(normalizedValue)}})<br/>`;
-                    }});
-                    return result;
-                }} else if (params.componentType === 'series' && params.seriesType === 'scatter') {{
-                    return params.name + '<br/>' +
-                           '相对效率: ' + params.value[0].toFixed(2) + '%<br/>' +
-                           '性能: ' + params.value[1].toFixed(2) + '%<br/>' +
-                           '综合得分: ' + formatNumber(params.value[2]);
-                }}
+                let result = params.name + '<br/>';
+                metrics.forEach((metric, index) => {{
+                    const normalizedValue = params.value[index];
+                    const rawValue = rawScores.find(s => s.model === params.name).scores[metric.key];
+                    result += `${{metric.name}}: ${{formatNumber(rawValue)}} (归一化: ${{formatNumber(normalizedValue)}})<br/>`;
+                }});
+                return result;
             }}
         }},
         legend: {{
@@ -1032,8 +1082,8 @@ function initComprehensiveComparisonChart() {{
                 max: 1,  // 归一化后的最大值为1
                 min: 0   // 归一化后的最小值为0
             }})),
-            center: ['25%', '60%'],
-            radius: '40%',
+            center: ['50%', '60%'],
+            radius: '70%',
             splitArea: {{
                 areaStyle: {{
                     color: ['rgba(250,250,250,0.3)', 'rgba(235,235,235,0.3)']
@@ -1049,10 +1099,92 @@ function initComprehensiveComparisonChart() {{
                         width: 4
                     }}
                 }}
+            }}
+        ],
+        toolbox: {{
+            feature: {{
+                saveAsImage: {{
+                    title: '保存为图片',
+                    name: 'comprehensive_radar_chart',
+                    pixelRatio: 2
+                }}
+            }}
+        }}
+    }};
+    
+    // 散点图配置
+    const scatterOptions = {{
+        title: {{
+            text: '性能-效率散点图',
+            left: 'center',
+            top: '5%'
+        }},
+        tooltip: {{
+            trigger: 'item',
+            formatter: function(params) {{
+                if (params.componentType === 'series' && params.seriesType === 'scatter') {{
+                    return params.name + '<br/>' +
+                           '相对效率: ' + params.value[0].toFixed(2) + '%<br/>' +
+                           '性能: ' + params.value[1].toFixed(2) + '%<br/>' +
+                           '综合得分: ' + formatNumber(params.value[2]);
+                }}
+                return '';
+            }}
+        }},
+        legend: {{
+            data: modelDisplayNames,
+            top: '10%'
+        }},
+        grid: {{
+            top: '20%',
+            left: '10%',
+            right: '5%',
+            bottom: '15%',
+            containLabel: true
+        }},
+        xAxis: {{
+            type: 'value',
+            name: '相对参数效率 (%)',
+            nameLocation: 'center',
+            nameGap: 40,
+            min: 0,  // 从0开始
+            max: xMax + xPadding,
+            axisLabel: {{
+                formatter: function(value) {{
+                    return value.toFixed(2) + '%';
+                }}
             }},
+            splitLine: {{
+                show: true,
+                lineStyle: {{
+                    type: 'dashed',
+                    opacity: 0.3
+                }}
+            }}
+        }},
+        yAxis: {{
+            type: 'value',
+            name: '性能 (AP50:95 %)',
+            nameLocation: 'center',
+            nameGap: 50,
+            min: yRange.min - yPadding,
+            max: yRange.max + yPadding,
+            axisLabel: {{
+                formatter: function(value) {{
+                    return value.toFixed(2) + '%';
+                }}
+            }},
+            splitLine: {{
+                show: true,
+                lineStyle: {{
+                    type: 'dashed',
+                    opacity: 0.3
+                }}
+            }}
+        }},
+        series: [
             {{
                 type: 'scatter',
-                coordinateSystem: 'cartesian2d',
                 data: scatterData,
                 symbolSize: function(data) {{
                     if (!data || !data.value || data.value.length < 3) return 20;
@@ -1085,7 +1217,6 @@ function initComprehensiveComparisonChart() {{
             }},
             {{
                 type: 'line',
-                coordinateSystem: 'cartesian2d',
                 data: trendlineData,
                 showSymbol: false,
                 lineStyle: {{
@@ -1094,75 +1225,12 @@ function initComprehensiveComparisonChart() {{
                     width: 2
                 }}
             }}
-        ],
-        grid: [
-            {{
-                left: '55%',
-                top: '20%',
-                right: '8%',    // 增加右侧边距
-                bottom: '10%',
-                containLabel: true
-            }}
-        ],
-        xAxis: [
-            {{
-                gridIndex: 0,
-                type: 'value',
-                name: '相对参数效率 (%)',
-                nameLocation: 'center',
-                nameGap: 45,
-                min: xRange.min - xPadding,
-                max: xRange.max + xPadding,
-                interval: (xRange.max - xRange.min) / 5,
-                axisLabel: {{
-                    formatter: function(value) {{
-                        return value.toFixed(2) + '%';
-                    }},
-                    margin: 12,
-                    rotate: 0
-                }},
-                splitLine: {{
-                    show: true,
-                    lineStyle: {{
-                        type: 'dashed',
-                        opacity: 0.3
-                    }}
-                }}
-            }}
-        ],
-        yAxis: [
-            {{
-                gridIndex: 0,
-                type: 'value',
-                name: '性能 (AP50:95 %)',
-                nameLocation: 'center',
-                nameGap: 55,    // 进一步增加y轴标题间距
-                position: 'left',  // 确保y轴在左侧
-                offset: 5,      // 向左偏移
-                min: yRange.min - yPadding,
-                max: yRange.max + yPadding,
-                interval: (yRange.max - yRange.min) / 5,
-                axisLabel: {{
-                    formatter: function(value) {{
-                        return value.toFixed(2) + '%';
-                    }},
-                    margin: 20,  // 增加标签与轴的距离
-                    align: 'right',
-                    padding: [0, 15, 0, 0]  // 右侧内边距，使文字远离轴线
-                }},
-                splitLine: {{
-                    show: true,
-                    lineStyle: {{
-                        type: 'dashed',
-                        opacity: 0.3
-                    }}
-                }}
-            }}
         ]
     }};
     
-    chart.setOption(options);
-    window.addEventListener('resize', () => chart.resize());
+    // 设置图表选项
+    radarChart.setOption(radarOptions);
+    scatterChart.setOption(scatterOptions);
 }}
 
 // 初始化参数表格
