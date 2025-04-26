@@ -10,6 +10,19 @@ def find_best_epoch_params():
     best_params = {}
     all_metrics = defaultdict(list)  # 存储所有指标的值，用于确定最大最小值
     
+    # 读取YOLO模型指标缓存
+    try:
+        with open('tools/visualization/sar_dfine/metrics_cache.json', 'r', encoding='utf-8') as f:
+            metrics_cache = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"错误: 无法读取metrics_cache.json: {e}")
+        metrics_cache = {
+            "模型": [],
+            "mAP@0.5:0.95": [],
+            "mAP@0.5": [],
+            "mAP@0.75": []
+        }
+    
     for model in models:
         early_stop_log = f'output/sar_dfine_{model}/early_stop_log.txt'
         train_log = f'output/sar_dfine_{model}/log.txt'
@@ -84,6 +97,19 @@ def generate_comparison_html():
     # 定义颜色映射（红黄蓝绿紫）
     colors = ['#ff4d4f', '#ffc53d', '#1890ff', '#52c41a', '#722ed1']
     color_mapping = {model: colors[i % len(colors)] for i, model in enumerate(model_names)}
+    
+    # 读取YOLO模型指标缓存
+    try:
+        with open('tools/visualization/sar_dfine/metrics_cache.json', 'r', encoding='utf-8') as f:
+            metrics_cache = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"错误: 无法读取metrics_cache.json: {e}")
+        metrics_cache = {
+            "模型": [],
+            "mAP@0.5:0.95": [],
+            "mAP@0.5": [],
+            "mAP@0.75": []
+        }
     
     # 创建AP比较数据
     ap_data = {}
@@ -177,6 +203,49 @@ const modelNames = {json.dumps(model_names)};
 const modelDisplayNames = {json.dumps(model_display_names)};
 const colorMapping = {json.dumps(color_mapping)};
 
+// YOLO模型数据
+const yoloModels = {json.dumps(metrics_cache['模型'])};
+const yoloMap = {json.dumps(metrics_cache['mAP@0.5:0.95'])};
+const yoloMap50 = {json.dumps(metrics_cache['mAP@0.5'])};
+const yoloMap75 = {json.dumps(metrics_cache['mAP@0.75'])};
+
+// SAR-D-FINE模型数据
+const sarModels = {json.dumps(model_names)};
+const sarMap = {json.dumps([ap_data[model]['AP'] for model in model_names])};
+const sarMap50 = {json.dumps([ap_data[model]['AP50'] for model in model_names])};
+const sarMap75 = {json.dumps([ap_data[model]['AP75'] for model in model_names])};
+
+// 合并数据为单个系列
+const combinedData = {{
+    map: [...yoloMap.map((value, index) => ({{
+        value: value,
+        name: yoloModels[index],
+        itemStyle: {{ color: '#D3D3D3' }}  // 浅灰色
+    }})), ...sarMap.map((value, index) => ({{
+        value: value,
+        name: 'D-FINE-' + sarModels[index].toUpperCase(),
+        itemStyle: {{ color: colorMapping[sarModels[index]] }}
+    }}))],
+    map50: [...yoloMap50.map((value, index) => ({{
+        value: value,
+        name: yoloModels[index],
+        itemStyle: {{ color: '#D3D3D3' }}  // 浅灰色
+    }})), ...sarMap50.map((value, index) => ({{
+        value: value,
+        name: 'D-FINE-' + sarModels[index].toUpperCase(),
+        itemStyle: {{ color: colorMapping[sarModels[index]] }}
+    }}))],
+    map75: [...yoloMap75.map((value, index) => ({{
+        value: value,
+        name: yoloModels[index],
+        itemStyle: {{ color: '#D3D3D3' }}  // 浅灰色
+    }})), ...sarMap75.map((value, index) => ({{
+        value: value,
+        name: 'D-FINE-' + sarModels[index].toUpperCase(),
+        itemStyle: {{ color: colorMapping[sarModels[index]] }}
+    }}))]
+}};
+
 // AP指标数据
 const apData = {json.dumps(ap_data)};
 const apRanges = {json.dumps(ap_ranges)};
@@ -193,7 +262,11 @@ const auxLossRanges = {json.dumps({k: metric_ranges.get(k, {'min': 0, 'max': 1})
 const otherData = {json.dumps(other_data)};
 
 // 格式化数字显示（小数保留4位有效数字，整数不显示小数点）
-function formatNumber(num) {{
+function formatNumber(num, isLearningRate = false) {{
+    if (isLearningRate) {{
+        // 对学习率使用科学计数法，保留2位小数
+        return num.toExponential(2);
+    }}
     if (Number.isInteger(num)) {{
         return num.toString();
     }} else {{
@@ -201,16 +274,42 @@ function formatNumber(num) {{
     }}
 }}
 
+// 计算坐标轴范围的辅助函数
+function calculateAxisRange(values, padding = 0.1) {{
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+    
+    // 如果数值差异很小（小于1%），则扩大显示范围以突出差异
+    if (range / max < 0.01) {{
+        const mid = (max + min) / 2;
+        const halfRange = Math.max(range, max * 0.01) / 2;
+        return {{
+            min: mid - halfRange * (1 + padding),
+            max: mid + halfRange * (1 + padding)
+        }};
+    }}
+    
+    // 否则使用常规的范围计算
+    return {{
+        min: min - range * padding,
+        max: max + range * padding
+    }};
+}}
+
 // 初始化所有图表
 function initCharts() {{
     // 初始化AP柱状图
     initAPBarCharts();
     
+    // 初始化YOLO对比图表
+    initYOLOComparisonCharts();
+    
     // 初始化损失雷达图
     initLossRadarChart();
     
-    // 初始化辅助损失分组柱状图
-    initAuxLossBarChart();
+    // 初始化辅助损失雷达图
+    initAuxLossRadarChart();
     
     // 初始化综合对比图
     initComprehensiveComparisonChart();
@@ -289,6 +388,237 @@ function initAPBarCharts() {{
         
         chart.setOption(options);
         window.addEventListener('resize', () => chart.resize());
+    }});
+}}
+
+// 初始化YOLO对比图表
+function initYOLOComparisonCharts() {{
+    // 计算各指标的范围
+    const mapRange = calculateAxisRange([...yoloMap, ...sarMap]);
+    const map50Range = calculateAxisRange([...yoloMap50, ...sarMap50]);
+    const map75Range = calculateAxisRange([...yoloMap75, ...sarMap75]);
+
+    // 初始化mAP@0.5:0.95图表
+    const mapChart = echarts.init(document.getElementById('yoloMapChart'));
+    mapChart.setOption({{
+        title: {{
+            text: 'mAP@0.5:0.95 对比',
+            left: 'center'
+        }},
+        tooltip: {{
+            trigger: 'axis',
+            axisPointer: {{
+                type: 'line',
+                axis: 'y',
+                animation: true,
+                lineStyle: {{
+                    color: '#666',
+                    type: 'dashed'
+                }}
+            }},
+            formatter: function(params) {{
+                return params[0].name + '<br/>' + 
+                       'mAP@0.5:0.95: ' + formatNumber(params[0].value);
+            }},
+            position: function (pos, params, el, elRect, size) {{
+                const obj = {{top: 10}};
+                obj[['left', 'right'][+(pos[0] < size.viewSize[0] / 2)]] = 30;
+                return obj;
+            }}
+        }},
+        grid: {{
+            left: '3%',
+            right: '4%',
+            bottom: '15%',
+            containLabel: true
+        }},
+        xAxis: {{
+            type: 'category',
+            data: combinedData.map.map(item => item.name),
+            axisLabel: {{
+                interval: 0,
+                rotate: 30
+            }}
+        }},
+        yAxis: {{
+            type: 'value',
+            min: mapRange.min,
+            max: mapRange.max,
+            axisLabel: {{
+                showMinLabel: false,
+                showMaxLabel: false,
+                formatter: value => formatNumber(value)
+            }},
+            splitLine: {{
+                show: true,
+                lineStyle: {{
+                    type: 'dashed',
+                    opacity: 0.3
+                }}
+            }}
+        }},
+        series: [{{
+            type: 'bar',
+            data: combinedData.map,
+            label: {{
+                show: true,
+                position: 'top',
+                formatter: function(params) {{
+                    return formatNumber(params.value);
+                }}
+            }}
+        }}]
+    }});
+
+    // 初始化mAP@0.5图表
+    const map50Chart = echarts.init(document.getElementById('yoloMap50Chart'));
+    map50Chart.setOption({{
+        title: {{
+            text: 'mAP@0.5 对比',
+            left: 'center'
+        }},
+        tooltip: {{
+            trigger: 'axis',
+            axisPointer: {{
+                type: 'line',
+                axis: 'y',
+                animation: true,
+                lineStyle: {{
+                    color: '#666',
+                    type: 'dashed'
+                }}
+            }},
+            formatter: function(params) {{
+                return params[0].name + '<br/>' + 
+                       'mAP@0.5: ' + formatNumber(params[0].value);
+            }},
+            position: function (pos, params, el, elRect, size) {{
+                const obj = {{top: 10}};
+                obj[['left', 'right'][+(pos[0] < size.viewSize[0] / 2)]] = 30;
+                return obj;
+            }}
+        }},
+        grid: {{
+            left: '3%',
+            right: '4%',
+            bottom: '15%',
+            containLabel: true
+        }},
+        xAxis: {{
+            type: 'category',
+            data: combinedData.map50.map(item => item.name),
+            axisLabel: {{
+                interval: 0,
+                rotate: 30
+            }}
+        }},
+        yAxis: {{
+            type: 'value',
+            min: map50Range.min,
+            max: map50Range.max,
+            axisLabel: {{
+                showMinLabel: false,
+                showMaxLabel: false,
+                formatter: value => formatNumber(value)
+            }},
+            splitLine: {{
+                show: true,
+                lineStyle: {{
+                    type: 'dashed',
+                    opacity: 0.3
+                }}
+            }}
+        }},
+        series: [{{
+            type: 'bar',
+            data: combinedData.map50,
+            label: {{
+                show: true,
+                position: 'top',
+                formatter: function(params) {{
+                    return formatNumber(params.value);
+                }}
+            }}
+        }}]
+    }});
+
+    // 初始化mAP@0.75图表
+    const map75Chart = echarts.init(document.getElementById('yoloMap75Chart'));
+    map75Chart.setOption({{
+        title: {{
+            text: 'mAP@0.75 对比',
+            left: 'center'
+        }},
+        tooltip: {{
+            trigger: 'axis',
+            axisPointer: {{
+                type: 'line',
+                axis: 'y',
+                animation: true,
+                lineStyle: {{
+                    color: '#666',
+                    type: 'dashed'
+                }}
+            }},
+            formatter: function(params) {{
+                return params[0].name + '<br/>' + 
+                       'mAP@0.75: ' + formatNumber(params[0].value);
+            }},
+            position: function (pos, params, el, elRect, size) {{
+                const obj = {{top: 10}};
+                obj[['left', 'right'][+(pos[0] < size.viewSize[0] / 2)]] = 30;
+                return obj;
+            }}
+        }},
+        grid: {{
+            left: '3%',
+            right: '4%',
+            bottom: '15%',
+            containLabel: true
+        }},
+        xAxis: {{
+            type: 'category',
+            data: combinedData.map75.map(item => item.name),
+            axisLabel: {{
+                interval: 0,
+                rotate: 30
+            }}
+        }},
+        yAxis: {{
+            type: 'value',
+            min: map75Range.min,
+            max: map75Range.max,
+            axisLabel: {{
+                showMinLabel: false,
+                showMaxLabel: false,
+                formatter: value => formatNumber(value)
+            }},
+            splitLine: {{
+                show: true,
+                lineStyle: {{
+                    type: 'dashed',
+                    opacity: 0.3
+                }}
+            }}
+        }},
+        series: [{{
+            type: 'bar',
+            data: combinedData.map75,
+            label: {{
+                show: true,
+                position: 'top',
+                formatter: function(params) {{
+                    return formatNumber(params.value);
+                }}
+            }}
+        }}]
+    }});
+
+    // 添加窗口大小改变时的重绘
+    window.addEventListener('resize', function() {{
+        mapChart.resize();
+        map50Chart.resize();
+        map75Chart.resize();
     }});
 }}
 
@@ -383,58 +713,58 @@ function initLossRadarChart() {{
     window.addEventListener('resize', () => chart.resize());
 }}
 
-// 初始化辅助损失分组柱状图 - 替代原来的散点图
-function initAuxLossBarChart() {{
+// 初始化辅助损失雷达图
+function initAuxLossRadarChart() {{
     const chart = echarts.init(document.getElementById('auxLossChart'));
     
     const auxMetrics = ['train_loss_vfl_aux_0', 'train_loss_bbox_aux_0', 'train_loss_giou_aux_0', 'train_loss_fgl_aux_0', 'train_loss_ddf_aux_0'];
     const auxNames = ['VFL Aux', 'Bbox Aux', 'GIoU Aux', 'FGL Aux', 'DDF Aux'];
     
-    // 准备分组柱状图的系列数据
+    // 为每个指标计算最小最大值
+    const metricMinMax = auxMetrics.map(metric => {{
+        // 收集所有模型在该指标上的值
+        const values = modelNames.map(model => auxLossData[model]?.[metric] || 0);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        // 设置一定的边界以便更好地显示对比
+        const range = max - min;
+        const padding = range * 0.1;
+        return {{
+            min: Math.max(0, min - padding),
+            max: max + padding
+        }};
+    }});
+    
+    // 构建雷达图的指标配置
+    const indicator = auxMetrics.map((metric, index) => {{
+        return {{
+            name: auxNames[index],
+            min: metricMinMax[index].min,
+            max: metricMinMax[index].max
+        }};
+    }});
+    
     const series = modelNames.map(model => {{
         return {{
+            value: auxMetrics.map(metric => auxLossData[model]?.[metric] || 0),
             name: model,
-            type: 'bar',
-            data: auxMetrics.map(metric => auxLossData[model]?.[metric] || 0),
             itemStyle: {{
                 color: colorMapping[model]
-            }},
-            label: {{
-                show: false,
-                position: 'top',
-                formatter: params => formatNumber(params.value)
             }}
         }};
     }});
     
-    // 计算每个指标的最大值和最小值
-    const yAxisRange = {{
-        min: 0,
-        max: 0
-    }};
-    
-    auxMetrics.forEach((metric, metricIndex) => {{
-        const values = modelNames.map(model => auxLossData[model]?.[metric] || 0);
-        const max = Math.max(...values);
-        if (max > yAxisRange.max) yAxisRange.max = max;
-    }});
-    
-    // 增加一点边界以便更好地显示
-    yAxisRange.max = yAxisRange.max * 1.1;
-    
     const options = {{
         title: {{
-            text: '辅助损失函数对比',
+            text: '辅助损失函数雷达图对比',
             left: 'center'
         }},
         tooltip: {{
-            trigger: 'axis',
+            trigger: 'item',
             formatter: function(params) {{
-                const metricIndex = params[0].dataIndex;
-                const metricName = auxNames[metricIndex];
-                let result = metricName + '<br/>';
-                params.forEach(param => {{
-                    result += param.seriesName + ': ' + formatNumber(param.value) + '<br/>';
+                let result = params.name + '<br/>';
+                auxMetrics.forEach((metric, index) => {{
+                    result += auxNames[index] + ': ' + formatNumber(params.value[index]) + '<br/>';
                 }});
                 return result;
             }}
@@ -443,125 +773,390 @@ function initAuxLossBarChart() {{
             top: '25px',
             data: modelDisplayNames
         }},
-        grid: {{
-            left: '3%',
-            right: '4%',
-            bottom: '15%',
-            containLabel: true
-        }},
-        xAxis: {{
-            type: 'category',
-            data: auxNames,
-            axisLabel: {{
-                interval: 0,
-                rotate: 30
+        radar: {{
+            indicator: indicator,
+            center: ['50%', '55%'],
+            radius: '70%',
+            shape: 'circle',
+            splitArea: {{
+                areaStyle: {{
+                    color: ['rgba(250,250,250,0.3)', 'rgba(235,235,235,0.3)']
+                }}
             }}
         }},
-        yAxis: {{
-            type: 'value',
-            min: yAxisRange.min,
-            max: yAxisRange.max,
-            name: '损失值',
-            axisLabel: {{
-                showMinLabel: false,
-                showMaxLabel: false
+        series: [
+            {{
+                type: 'radar',
+                data: series,
+                lineStyle: {{
+                    width: 2
+                }},
+                emphasis: {{
+                    lineStyle: {{
+                        width: 4
+                    }}
+                }}
             }}
-        }},
-        series: series
+        ]
     }};
     
     chart.setOption(options);
     window.addEventListener('resize', () => chart.resize());
 }}
 
-// 初始化综合对比图（平行坐标系）
+// 初始化综合参数对比图
 function initComprehensiveComparisonChart() {{
     const chart = echarts.init(document.getElementById('comprehensiveChart'));
     
-    // 准备平行坐标轴
-    const dimensions = [
-        'best_AP50_95', 'n_parameters', 'train_lr', 'best_epoch'
+    // 定义评价指标
+    const metrics = [
+        {{
+            name: '性能指标',
+            key: 'best_AP50_95',
+            weight: 0.35
+        }},
+        {{
+            name: '参数效率',
+            key: 'efficiency',
+            weight: 0.25
+        }},
+        {{
+            name: '训练效率',
+            key: 'training_efficiency',
+            weight: 0.2
+        }},
+        {{
+            name: '稳定性',
+            key: 'stability',
+            weight: 0.2
+        }}
     ];
     
-    const dimensionNames = [
-        'AP50:95', '参数量', '学习率', '最佳Epoch'
-    ];
+    // 数据归一化函数
+    function normalize(value, min, max) {{
+        if (max === min) return 1;
+        return (value - min) / (max - min);
+    }}
     
-    // 为平行坐标轴准备数据
-    const data = modelNames.map(model => {{
-        const modelData = otherData[model];
-        return [
-            modelData.best_AP50_95 || 0,
-            modelData.n_parameters || 0,
-            modelData.train_lr || 0,
-            modelData.best_epoch || 0,
-            model // 用于图例显示
-        ];
-    }});
-    
-    // 确定每个维度的最大最小值
-    const dimensionRanges = dimensions.map((dim, index) => {{
-        const values = data.map(d => d[index]);
-        const min = Math.min(...values);
-        const max = Math.max(...values);
-        const range = max - min;
-        // 为了更好的可视化效果，稍微扩展范围
+    // 计算每个模型的原始数据
+    const rawScores = modelNames.map(model => {{
+        const data = otherData[model];
+        
+        // 计算参数效率 (AP50:95 / log(参数量))
+        const efficiency = (data.best_AP50_95 || 0) / Math.log(data.n_parameters || 1);
+        
+        // 计算训练效率 (AP50:95 / epoch)
+        const training_efficiency = (data.best_AP50_95 || 0) / (data.best_epoch || 1);
+        
+        // 计算稳定性
+        const stability = calculateStability(model);
+        
         return {{
-            min: Math.max(0, min - range * 0.1),
-            max: max + range * 0.1
+            model: model,
+            scores: {{
+                best_AP50_95: data.best_AP50_95 || 0,
+                efficiency: efficiency,
+                training_efficiency: training_efficiency,
+                stability: stability
+            }}
         }};
     }});
     
+    // 获取每个指标的最大最小值
+    const ranges = metrics.reduce((acc, metric) => {{
+        const values = rawScores.map(score => score.scores[metric.key]);
+        acc[metric.key] = {{
+            min: Math.min(...values),
+            max: Math.max(...values)
+        }};
+        return acc;
+    }}, {{}});
+    
+    // 计算归一化后的得分和综合得分
+    const modelScores = rawScores.map(raw => {{
+        const normalizedScores = {{}};
+        metrics.forEach(metric => {{
+            normalizedScores[metric.key] = normalize(
+                raw.scores[metric.key],
+                ranges[metric.key].min,
+                ranges[metric.key].max
+            );
+        }});
+        
+        // 计算综合得分
+        const totalScore = metrics.reduce((sum, metric) => {{
+            return sum + normalizedScores[metric.key] * metric.weight;
+        }}, 0);
+        
+        return {{
+            ...raw,
+            normalizedScores,
+            totalScore
+        }};
+    }});
+    
+    // 计算稳定性指标
+    function calculateStability(model) {{
+        const data = otherData[model];
+        
+        // 使用多个指标计算稳定性
+        const trainLoss = data.train_loss || 0;
+        const learningRate = data.train_lr || 0;
+        const epoch = data.best_epoch || 1;
+        
+        // 损失稳定性（损失值越小越稳定）
+        const lossStability = 1 / (1 + trainLoss);
+        
+        // 学习率稳定性（学习率越小越稳定）
+        const lrStability = 1 / (1 + learningRate);
+        
+        // 收敛稳定性（收敛轮次越少越稳定）
+        const epochStability = 1 / Math.sqrt(epoch);
+        
+        // 综合稳定性得分
+        return (lossStability * 0.4 + lrStability * 0.3 + epochStability * 0.3);
+    }}
+    
+    // 准备雷达图数据
+    const radarData = modelScores.map(score => {{
+        return {{
+            name: score.model,
+            value: metrics.map(metric => score.normalizedScores[metric.key]),
+            itemStyle: {{
+                color: colorMapping[score.model]
+            }}
+        }};
+    }});
+    
+    // 准备散点图数据
+    const scatterData = modelScores.map(score => {{
+        // 计算相对效率值（相对于最大参数量的模型）
+        const maxParams = Math.max(...modelNames.map(m => otherData[m].n_parameters));
+        const relativeEfficiency = (score.scores.efficiency * maxParams) / 
+                                 (otherData[score.model].n_parameters || 1);
+        
+        return {{
+            name: score.model,
+            value: [
+                relativeEfficiency * 100,        // 转换为百分比 - 现在是x轴
+                score.scores.best_AP50_95 * 100, // 转换为百分比 - 现在是y轴
+                score.totalScore
+            ],
+            itemStyle: {{
+                color: colorMapping[score.model]
+            }}
+        }};
+    }});
+    
+    // 计算坐标轴范围
+    const xValues = scatterData.map(d => d.value[0]);
+    const yValues = scatterData.map(d => d.value[1]);
+    
+    const xRange = {{
+        min: Math.min(...xValues),
+        max: Math.max(...xValues)
+    }};
+    const yRange = {{
+        min: Math.min(...yValues),
+        max: Math.max(...yValues)
+    }};
+    
+    // 扩展范围以突出差异
+    const xPadding = (xRange.max - xRange.min) * 0.2;
+    const yPadding = (yRange.max - yRange.min) * 0.2;
+    
+    // 计算趋势线
+    const linearRegression = (data) => {{
+        const x = data.map(d => d.value[0]);
+        const y = data.map(d => d.value[1]);
+        const n = x.length;
+        
+        const xy = x.map((xi, i) => xi * y[i]);
+        const xx = x.map(xi => xi * xi);
+        
+        const sum_x = x.reduce((a, b) => a + b, 0);
+        const sum_y = y.reduce((a, b) => a + b, 0);
+        const sum_xy = xy.reduce((a, b) => a + b, 0);
+        const sum_xx = xx.reduce((a, b) => a + b, 0);
+        
+        const slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x);
+        const intercept = (sum_y - slope * sum_x) / n;
+        
+        return [
+            [xRange.min - xPadding, slope * (xRange.min - xPadding) + intercept],
+            [xRange.max + xPadding, slope * (xRange.max + xPadding) + intercept]
+        ];
+    }};
+    
+    const trendlineData = linearRegression(scatterData);
+    
     const options = {{
-        title: {{
-            text: '综合参数对比',
-            left: 'center'
+        title: [
+            {{
+                text: '模型综合性能雷达图',
+                left: '5%',
+                top: '5%'
+            }},
+            {{
+                text: '性能-效率散点图',
+                left: '55%',
+                top: '5%'
+            }}
+        ],
+        tooltip: {{
+            trigger: 'item',
+            formatter: function(params) {{
+                if (params.componentType === 'series' && params.seriesType === 'radar') {{
+                    let result = params.name + '<br/>';
+                    metrics.forEach((metric, index) => {{
+                        const normalizedValue = params.value[index];
+                        const rawValue = rawScores.find(s => s.model === params.name).scores[metric.key];
+                        result += `${{metric.name}}: ${{formatNumber(rawValue)}} (归一化: ${{formatNumber(normalizedValue)}})<br/>`;
+                    }});
+                    return result;
+                }} else if (params.componentType === 'series' && params.seriesType === 'scatter') {{
+                    return params.name + '<br/>' +
+                           '相对效率: ' + params.value[0].toFixed(2) + '%<br/>' +
+                           '性能: ' + params.value[1].toFixed(2) + '%<br/>' +
+                           '综合得分: ' + formatNumber(params.value[2]);
+                }}
+            }}
         }},
         legend: {{
-            top: '25px',
-            data: modelDisplayNames
+            data: modelDisplayNames,
+            top: '10%'
         }},
-        tooltip: {{
-            trigger: 'item'
-        }},
-        parallelAxis: dimensions.map((dim, index) => {{
-            return {{
-                dim: index,
-                name: dimensionNames[index],
-                min: dimensionRanges[index].min,
-                max: dimensionRanges[index].max,
-                nameLocation: 'end',
-                nameGap: 15,
-                axisLabel: {{
-                    showMinLabel: false,
-                    showMaxLabel: false
+        radar: {{
+            indicator: metrics.map(metric => ({{
+                name: metric.name,
+                max: 1,  // 归一化后的最大值为1
+                min: 0   // 归一化后的最小值为0
+            }})),
+            center: ['25%', '60%'],
+            radius: '40%',
+            splitArea: {{
+                areaStyle: {{
+                    color: ['rgba(250,250,250,0.3)', 'rgba(235,235,235,0.3)']
                 }}
-            }};
-        }}),
-        parallel: {{
-            left: '5%',
-            right: '13%',
-            bottom: '10%',
-            top: '20%',
-            parallelAxisDefault: {{
-                nameLocation: 'end',
-                nameGap: 20
             }}
         }},
         series: [
             {{
-                type: 'parallel',
-                lineStyle: {{
-                    width: 4
+                type: 'radar',
+                data: radarData,
+                emphasis: {{
+                    lineStyle: {{
+                        width: 4
+                    }}
+                }}
+            }},
+            {{
+                type: 'scatter',
+                coordinateSystem: 'cartesian2d',
+                data: scatterData,
+                symbolSize: function(data) {{
+                    if (!data || !data.value || data.value.length < 3) return 20;
+                    // 使用sigmoid函数平滑点的大小变化
+                    const score = data.value[2];
+                    const size = 30 / (1 + Math.exp(-5 * (score - 0.5))) + 15;
+                    return size;
                 }},
-                data: data.map((d, index) => {{
-                    return {{
-                        value: d,
-                        lineStyle: {{
-                            color: colorMapping[modelNames[index]]
-                        }}
-                    }};
-                }})
+                label: {{
+                    show: true,
+                    formatter: function(params) {{
+                        return params.name;
+                    }},
+                    position: 'right',
+                    distance: 10,
+                    textStyle: {{
+                        fontSize: 12,
+                        fontWeight: 'bold'
+                    }}
+                }},
+                emphasis: {{
+                    scale: true,
+                    itemStyle: {{
+                        shadowBlur: 10,
+                        shadowColor: 'rgba(0,0,0,0.3)'
+                    }}
+                }},
+                xAxisIndex: 0,
+                yAxisIndex: 0
+            }},
+            {{
+                type: 'line',
+                coordinateSystem: 'cartesian2d',
+                data: trendlineData,
+                showSymbol: false,
+                lineStyle: {{
+                    type: 'dashed',
+                    opacity: 0.5,
+                    width: 2
+                }}
+            }}
+        ],
+        grid: [
+            {{
+                left: '55%',
+                top: '20%',
+                right: '8%',    // 增加右侧边距
+                bottom: '10%',
+                containLabel: true
+            }}
+        ],
+        xAxis: [
+            {{
+                gridIndex: 0,
+                type: 'value',
+                name: '相对参数效率 (%)',
+                nameLocation: 'center',
+                nameGap: 45,
+                min: xRange.min - xPadding,
+                max: xRange.max + xPadding,
+                interval: (xRange.max - xRange.min) / 5,
+                axisLabel: {{
+                    formatter: function(value) {{
+                        return value.toFixed(2) + '%';
+                    }},
+                    margin: 12,
+                    rotate: 0
+                }},
+                splitLine: {{
+                    show: true,
+                    lineStyle: {{
+                        type: 'dashed',
+                        opacity: 0.3
+                    }}
+                }}
+            }}
+        ],
+        yAxis: [
+            {{
+                gridIndex: 0,
+                type: 'value',
+                name: '性能 (AP50:95 %)',
+                nameLocation: 'center',
+                nameGap: 55,    // 进一步增加y轴标题间距
+                position: 'left',  // 确保y轴在左侧
+                offset: 5,      // 向左偏移
+                min: yRange.min - yPadding,
+                max: yRange.max + yPadding,
+                interval: (yRange.max - yRange.min) / 5,
+                axisLabel: {{
+                    formatter: function(value) {{
+                        return value.toFixed(2) + '%';
+                    }},
+                    margin: 20,  // 增加标签与轴的距离
+                    align: 'right',
+                    padding: [0, 15, 0, 0]  // 右侧内边距，使文字远离轴线
+                }},
+                splitLine: {{
+                    show: true,
+                    lineStyle: {{
+                        type: 'dashed',
+                        opacity: 0.3
+                    }}
+                }}
             }}
         ]
     }};
@@ -597,7 +1192,9 @@ function initParameterTable() {{
         
         modelNames.forEach(model => {{
             const value = otherData[model][param.key] || 0;
-            tableHTML += `<td style="color:${{colorMapping[model]}}">${{formatNumber(value)}}</td>`;
+            const formattedValue = param.key === 'train_lr' ? 
+                formatNumber(value, true) : formatNumber(value);
+            tableHTML += `<td style="color:${{colorMapping[model]}}">${{formattedValue}}</td>`;
         }});
         
         tableHTML += '</tr>';
