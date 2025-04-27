@@ -239,6 +239,21 @@
             </div>
             <div class="chart-container">
                 <div id="comprehensiveScatterChart" class="large-chart"></div>
+                <script>
+                    var scatterChart = echarts.init(document.getElementById('comprehensiveScatterChart'));
+                    var scatterOption = {
+                        toolbox: {
+                            feature: {
+                                saveAsImage: {
+                                    title: '保存为图片',
+                                    name: 'performance_efficiency_scatter',
+                                    pixelRatio: 2
+                                }
+                            }
+                        }
+                    };
+                    scatterChart.setOption(scatterOption);
+                </script>
             </div>
         </div>
         
@@ -261,7 +276,227 @@
     </div>
 
     <script>
-        // JavaScript代码将在这里生成
+        // 工具箱配置
+        const toolboxConfig = {
+            feature: {
+                saveAsImage: {
+                    title: '保存为图片',
+                    pixelRatio: 2
+                }
+            }
+        };
+
+        // 初始化所有图表
+        function initCharts() {
+            // 初始化AP柱状图
+            initAPBarCharts();
+            
+            // 初始化YOLO对比图表
+            initYOLOComparisonCharts();
+            
+            // 初始化损失雷达图
+            initLossRadarChart();
+            
+            // 初始化辅助损失雷达图
+            initAuxLossRadarChart();
+            
+            // 初始化综合对比图
+            initComprehensiveComparisonChart();
+            
+            // 初始化参数表格
+            initParameterTable();
+        }
+
+        // 基础配置
+        const baseChartConfig = {
+            title: {
+                left: 'center'
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'shadow'
+                }
+            },
+            toolbox: toolboxConfig,
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            }
+        };
+
+        // 初始化AP柱状图
+        function initAPBarCharts() {
+            // AP指标名称和对应的配置
+            const apConfigs = [
+                { id: 'ap1Chart', title: 'AP (IoU=0.5:0.95)', dataKey: 'map' },
+                { id: 'ap2Chart', title: 'AP50 (IoU=0.5)', dataKey: 'map50' },
+                { id: 'ap3Chart', title: 'AP75 (IoU=0.75)', dataKey: 'map75' },
+                { id: 'ap4Chart', title: 'APS (小目标)', dataKey: 'maps' },
+                { id: 'ap5Chart', title: 'APM (中目标)', dataKey: 'mapm' },
+                { id: 'ap6Chart', title: 'APL (大目标)', dataKey: 'mapl' }
+            ];
+            
+            apConfigs.forEach((config, index) => {
+                const chart = echarts.init(document.getElementById(config.id));
+                const options = {
+                    ...baseChartConfig,
+                    title: {
+                        text: config.title,
+                        left: 'center'
+                    },
+                    toolbox: {
+                        feature: {
+                            saveAsImage: {
+                                title: '保存为图片',
+                                name: `ap_${config.dataKey}`,
+                                pixelRatio: 2
+                            }
+                        }
+                    },
+                    // ...其他配置保持不变...
+                };
+                chart.setOption(options);
+            });
+        }
+
+        // 初始化YOLO对比图表
+        function initYOLOComparisonCharts() {
+            const charts = ['yoloMapChart', 'yoloMap50Chart', 'yoloMap75Chart'].map(id => 
+                echarts.init(document.getElementById(id))
+            );
+            
+            const titles = ['mAP@0.5:0.95 对比', 'mAP@0.5 对比', 'mAP@0.75 对比'];
+            const names = ['map_comparison', 'map50_comparison', 'map75_comparison'];
+            
+            charts.forEach((chart, index) => {
+                const options = {
+                    ...baseChartConfig,
+                    title: {
+                        text: titles[index],
+                        left: 'center'
+                    },
+                    toolbox: {
+                        feature: {
+                            saveAsImage: {
+                                title: '保存为图片',
+                                name: names[index],
+                                pixelRatio: 2
+                            }
+                        }
+                    },
+                    // ...其他配置保持不变...
+                };
+                chart.setOption(options);
+            });
+        }
+
+        // 初始化损失雷达图
+        function initLossRadarChart() {
+            const chart = echarts.init(document.getElementById('lossRadarChart'));
+            const options = {
+                ...baseChartConfig,
+                title: {
+                    text: '损失函数分布',
+                    left: 'center'
+                },
+                toolbox: {
+                    feature: {
+                        saveAsImage: {
+                            title: '保存为图片',
+                            name: 'loss_radar_chart',
+                            pixelRatio: 2
+                        }
+                    }
+                },
+                radar: {
+                    indicator: [
+                        { name: 'Total Loss', max: 1 },
+                        { name: 'VFL Loss', max: 1 },
+                        { name: 'Bbox Loss', max: 1 },
+                        { name: 'GIoU Loss', max: 1 },
+                        { name: 'FGL Loss', max: 1 }
+                    ],
+                    center: ['50%', '55%'],
+                    radius: '70%'
+                },
+                // ...其他配置保持不变...
+            };
+            chart.setOption(options);
+        }
+
+        // 初始化辅助损失雷达图
+        function initAuxLossRadarChart() {
+            const chart = echarts.init(document.getElementById('auxLossChart'));
+            const options = {
+                ...baseChartConfig,
+                title: {
+                    text: '辅助损失分布',
+                    left: 'center'
+                },
+                toolbox: {
+                    feature: {
+                        saveAsImage: {
+                            title: '保存为图片',
+                            name: 'aux_loss_radar_chart',
+                            pixelRatio: 2
+                        }
+                    }
+                },
+                radar: {
+                    indicator: [
+                        { name: 'VFL Aux', max: 1 },
+                        { name: 'Bbox Aux', max: 1 },
+                        { name: 'GIoU Aux', max: 1 },
+                        { name: 'FGL Aux', max: 1 },
+                        { name: 'DDF Aux', max: 1 }
+                    ],
+                    center: ['50%', '55%'],
+                    radius: '70%'
+                },
+                // ...其他配置保持不变...
+            };
+            chart.setOption(options);
+        }
+
+        // 初始化综合对比图表
+        function initComprehensiveComparisonChart() {
+            const radarChart = echarts.init(document.getElementById('comprehensiveRadarChart'));
+            const radarOptions = {
+                ...baseChartConfig,
+                title: {
+                    text: '综合性能雷达图',
+                    left: 'center'
+                },
+                toolbox: {
+                    feature: {
+                        saveAsImage: {
+                            title: '保存为图片',
+                            name: 'comprehensive_radar_chart',
+                            pixelRatio: 2
+                        }
+                    }
+                },
+                // ...其他配置保持不变...
+            };
+            radarChart.setOption(radarOptions);
+
+            // 散点图已经在前面配置过了
+        }
+
+        // 当页面加载完成时初始化所有图表
+        document.addEventListener('DOMContentLoaded', initCharts);
+
+        // 当窗口大小改变时，调整所有图表大小
+        window.addEventListener('resize', function() {
+            const charts = document.querySelectorAll('.ap-chart, .large-chart').forEach(chart => {
+                if (chart.__echarts__) {
+                    chart.__echarts__.resize();
+                }
+            });
+        });
     </script>
 </body>
-</html> 
+</html>
